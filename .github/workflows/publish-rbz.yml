@@ -1,0 +1,37 @@
+name: Publish HQ-House RBZ
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'HQ-House_*.rbz'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify and publish newest RBZ
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          file=$(find . -maxdepth 1 -type f -name 'HQ-House_*.rbz' -printf '%f\n' | sort -V | tail -n 1)
+          test -n "$file"
+          version=${file#HQ-House_}
+          version=${version%.rbz}
+          sha256sum -c "HQ-House_$version.sha256.txt"
+          tag="v$version"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists."
+            exit 0
+          fi
+          hash=$(sha256sum "$file" | cut -d' ' -f1)
+          printf 'Bản cài đặt HQ-House cho SketchUp.\n\nTrong SketchUp, mở Extension Manager → Install Extension, chọn file RBZ rồi khởi động lại SketchUp.\n\nSHA-256: `%s`.\n' "$hash" > release-notes.md
+          cp "$file" HQ-House_latest.rbz
+          gh release create "$tag" "$file" HQ-House_latest.rbz --target "$GITHUB_SHA" --title "HQ-House $version" --notes-file release-notes.md --latest
